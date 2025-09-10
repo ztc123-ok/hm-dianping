@@ -92,6 +92,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 7.2.将User对象转为Hash存储
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
         Map<String, Object> userMap = BeanUtil.beanToMap(userDTO);
+        // 注意stringRedisTemplate只接收string类型的map
         userMap.forEach((key, value) -> {
             if (null != value) userMap.put(key, String.valueOf(value));
         });
