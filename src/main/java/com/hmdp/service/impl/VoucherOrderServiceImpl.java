@@ -9,6 +9,8 @@ import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +35,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RedisIdWorker redisIdWorker;
 
+    @Resource
+    private RedissonClient redissonClient;
+
     @Override
     public Result seckillVoucher(Long voucherId) {
         // 1.查询优惠券
@@ -55,11 +60,25 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
         // 8.返回订单id
         Long userId = UserHolder.getUser().getId();
-        synchronized (userId.toString().intern()) {
+
+        // 创建锁对象
+        RLock lock = redissonClient.getLock("lock:order:" + userId);
+        // 获取锁: 默认超时失败返回，等待时间30秒
+        boolean isLock = lock.tryLock();
+        // 判断是否获取锁成功
+        if(!isLock){
+            // 获取锁失败，返回错误或重试
+            return Result.fail("不允许重复下单");
+        }
+        try {
             // 获取与事务有关的代理对象
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        }finally {
+            // 释放锁
+            lock.unlock();
         }
+
     }
 
     @Transactional
